@@ -1,0 +1,10 @@
+{
+  "manifest_version": 3,
+  "name": "WikiMasters Auto-Pull",
+  "version": "1.0.0",
+  "description": "Ouvre automatiquement les paquets disponibles sur wiki-masters.com/pulls toutes les 100 minutes.",
+  "permissions": ["alarms", "scripting", "tabs", "storage", "notifications"],
+  "host_permissions": ["https://www.wiki-masters.com/*"],
+  "background": { "service_worker": "background.js" },
+  "action": { "default_popup": "popup.html", "default_title": "WikiMasters Auto-Pull" }
+}
