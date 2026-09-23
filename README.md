@@ -23,7 +23,7 @@ L'extension n'est pas publiée sur le Chrome Web Store : on l'installe en mode d
    - soit avec le bouton vert **Code → Download ZIP** de cette page, puis décompresser l'archive ;
    - soit avec git :
      ```bash
-     git clone https://github.com/<votre-pseudo>/wikimasters-autopull.git
+     git clone git@github.com:erocha42/wikimasters-autopull.git
      ```
 2. Ouvrir `chrome://extensions` dans Chrome.
 3. Activer le **Mode développeur** (interrupteur en haut à droite).
