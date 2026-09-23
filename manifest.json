@@ -5,6 +5,21 @@
   "description": "Ouvre automatiquement les paquets disponibles sur wiki-masters.com/pulls toutes les 100 minutes.",
   "permissions": ["alarms", "scripting", "tabs", "storage", "notifications"],
   "host_permissions": ["https://www.wiki-masters.com/*"],
-  "background": { "service_worker": "background.js" },
-  "action": { "default_popup": "popup.html", "default_title": "WikiMasters Auto-Pull" }
+  "background": {
+    "scripts": ["background.js"],
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "WikiMasters Auto-Pull",
+    "default_icon": "icon.png"
+  },
+  "icons": {
+    "128": "icon.png"
+  },
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "wikimasters-autopull@erocha42"
+    }
+  }
 }

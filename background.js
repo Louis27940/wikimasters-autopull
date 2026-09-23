@@ -1,3 +1,5 @@
+// Gecko (Firefox) exige le namespace `browser` pour les Promesses (son `chrome.*` attend des callbacks).
+const chrome = globalThis.browser || globalThis.chrome;
 const PULLS_URL = "https://www.wiki-masters.com/pulls";
 const ALARM = "wm-autopull";
 const DEFAULTS = { enabled: true, periodMin: 100, background: true, notify: true };

@@ -1,3 +1,5 @@
+// Harmonisation Promesses multi-navigateur (Gecko (Firefox) utilise "browser.*", Chromium "chrome.*")
+const chrome = globalThis.browser || globalThis.chrome;
 const DEFAULTS = { enabled: true, periodMin: 100, background: true, notify: true };
 const $ = (id) => document.getElementById(id);
 const fmt = (t) => (t ? new Date(t).toLocaleString("fr-FR") : "—");

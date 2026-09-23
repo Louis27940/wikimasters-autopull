@@ -1,6 +1,6 @@
 # WikiMasters Auto-Pull
 
-Extension Chrome qui ouvre automatiquement les paquets disponibles sur [wiki-masters.com/pulls](https://www.wiki-masters.com/pulls) toutes les 100 minutes (intervalle réglable).
+Extension pour Chromium (Chrome, Brave, Edge…) et Firefox qui ouvre automatiquement les paquets disponibles sur [wiki-masters.com/pulls](https://www.wiki-masters.com/pulls) toutes les 100 minutes (intervalle réglable).
 
 ## Fonctionnalités
 
@@ -17,7 +17,7 @@ Extension Chrome qui ouvre automatiquement les paquets disponibles sur [wiki-mas
 
 ## Installation
 
-L'extension n'est pas publiée sur le Chrome Web Store : on l'installe en mode développeur.
+L'extension n'est pas publiée sur les stores officiels : on l'installe en mode développeur / temporaire.
 
 1. **Télécharger le code**
    - soit avec le bouton vert **Code → Download ZIP** de cette page, puis décompresser l'archive ;
@@ -25,19 +25,29 @@ L'extension n'est pas publiée sur le Chrome Web Store : on l'installe en mode d
      ```bash
      git clone git@github.com:erocha42/wikimasters-autopull.git
      ```
-2. Ouvrir `chrome://extensions` dans Chrome.
+
+### Chrome & navigateurs Chromium (Edge, Brave, Opera…)
+
+2. Ouvrir `chrome://extensions`.
 3. Activer le **Mode développeur** (interrupteur en haut à droite).
 4. Cliquer sur **Charger l'extension non empaquetée** et sélectionner le dossier qui contient `manifest.json`.
 5. Épingler l'extension (icône puzzle 🧩 → épingle) pour avoir accès au popup.
 
-> Il faut être **connecté à WikiMasters** dans ce navigateur. L'extension utilise votre session existante.
+### Navigateurs Firefox
 
-Ça marche aussi dans les autres navigateurs basés sur Chromium : Edge, Brave, Opera…
+2. Ouvrir `about:debugging#/runtime/this-firefox` dans la barre d'adresse.
+3. Cliquer sur **Charger un module temporaire…** (*Load Temporary Add-on…*).
+4. Sélectionner le fichier `manifest.json` dans le dossier téléchargé.
+5. Épingler l'extension dans la barre d'outils pour avoir accès au popup.
+
+> Il faut être **connecté à WikiMasters** dans ce navigateur. L'extension utilise votre session existante.
 
 ## Mise à jour
 
 1. Remplacer les fichiers par la nouvelle version, avec `git pull` ou en retéléchargeant le ZIP.
-2. Dans `chrome://extensions`, cliquer sur l'icône ↻ de l'extension.
+2. Recharger l'extension :
+   - **Chrome / Chromium** : dans `chrome://extensions`, cliquer sur l'icône ↻ de l'extension.
+   - **Firefox** : dans `about:debugging#/runtime/this-firefox`, cliquer sur **Recharger** en face de l'extension.
 
 ## Fonctionnement
 
@@ -64,7 +74,7 @@ L'extension n'envoie aucune donnée à l'extérieur. Elle se contente de cliquer
 
 ## Limites
 
-- Chrome doit être **ouvert** : si un cycle est manqué, il s'exécute au prochain démarrage.
+- Le navigateur doit être **ouvert** : si un cycle est manqué, il s'exécute au prochain démarrage.
 - Le script repère les boutons par leur texte (« Ouvrir », « Continuer ») et la flèche « suivant ». Si le site change son interface, il faudra adapter `opener.js`.
 - Chrome peut afficher au démarrage un avertissement sur les extensions en mode développeur. C'est normal, il suffit de le fermer.
 
