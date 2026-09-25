@@ -2,6 +2,7 @@
 // Alias `ext` pour éviter tout conflit avec les wrappers d'exécution de certains navigateurs (ex: Opera).
 const ext = globalThis.browser || globalThis.chrome;
 const PULLS_URL = "https://www.wiki-masters.com/pulls";
+const LOGIN_URL = "https://www.wiki-masters.com/login";
 const ALARM = "wm-autopull";
 const DEFAULTS = { enabled: true, periodMin: 100, maxPacks: 10, background: true, notify: true };
 
@@ -127,6 +128,24 @@ async function run(forceActive = false) {
   }
 }
 
+function buildNotificationData(statusType, rawMessage) {
+  let title = "WikiMasters Auto-Pull : Succès";
+  let message = rawMessage;
+
+  if (statusType === "AUTH_REQUIRED") {
+    title = "WikiMasters : Connexion requise";
+    message = "Session expirée. Cliquez ici pour vous reconnecter.";
+  } else if (statusType === "ERROR") {
+    title = "WikiMasters : Erreur";
+    message = rawMessage || "Une erreur est survenue lors de l'ouverture.";
+  } else if (statusType === "CANCELLED") {
+    title = "WikiMasters : Opération interrompue";
+    message = "Le cycle a été arrêté par l'utilisateur.";
+  }
+
+  return { title, message };
+}
+
 async function finish(tabId, wasActive, result) {
   const s = await getSettings();
 
@@ -155,32 +174,44 @@ async function finish(tabId, wasActive, result) {
     try { await ext.tabs.remove(tabId); } catch {}
   }
 
-  if (s.notify) {
+  if (s.notify && typeof ext !== "undefined" && ext.notifications?.create) {
     try {
-      ext.notifications.create({
+      const notifData = buildNotificationData(statusType, status);
+      ext.notifications.create("wm-status-notification", {
         type: "basic",
         iconUrl: "icon.png",
-        title: "WikiMasters Auto-Pull",
-        message: status,
+        title: notifData.title,
+        message: notifData.message,
       });
     } catch {}
   }
 }
 
-ext.runtime.onMessage.addListener((msg, sender, sendResponse) => {
-  if (msg.type === "wm-run-now") run(true);
-  else if (msg.type === "wm-stop") stopCurrentRun();
-  else if (msg.type === "wm-reschedule") schedule();
-  sendResponse?.({ ok: true });
-});
+if (typeof ext !== "undefined") {
+  ext.runtime?.onMessage?.addListener((msg, sender, sendResponse) => {
+    if (msg.type === "wm-run-now") run(true);
+    else if (msg.type === "wm-stop") stopCurrentRun();
+    else if (msg.type === "wm-reschedule") schedule();
+    sendResponse?.({ ok: true });
+  });
 
-ext.alarms.onAlarm.addListener((a) => { if (a.name === ALARM) run(); });
-ext.runtime.onInstalled.addListener(async () => { await schedule(); });
-ext.runtime.onStartup.addListener(async () => {
-  await ext.storage.local.remove("running");
-  if (!(await ext.alarms.get(ALARM))) await schedule();
-});
+  ext.notifications?.onClicked?.addListener((notificationId) => {
+    if (notificationId === "wm-status-notification") {
+      ext.storage.local.get("lastStatusType").then(({ lastStatusType }) => {
+        const targetUrl = lastStatusType === "AUTH_REQUIRED" ? LOGIN_URL : PULLS_URL;
+        ext.tabs.create({ url: targetUrl });
+      }).catch(() => {});
+    }
+  });
+
+  ext.alarms?.onAlarm?.addListener((a) => { if (a.name === ALARM) run(); });
+  ext.runtime?.onInstalled?.addListener(async () => { await schedule(); });
+  ext.runtime?.onStartup?.addListener(async () => {
+    await ext.storage.local.remove("running");
+    if (!(await ext.alarms?.get(ALARM))) await schedule();
+  });
+}
 
 if (typeof module !== "undefined" && module.exports) {
-  module.exports = { run, finish, schedule, getSettings, waitTabComplete, stopCurrentRun, DEFAULTS };
+  module.exports = { run, finish, schedule, getSettings, waitTabComplete, stopCurrentRun, buildNotificationData, LOGIN_URL, DEFAULTS };
 }
