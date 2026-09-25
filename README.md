@@ -23,7 +23,7 @@ L'extension n'est pas publiée sur les stores officiels : on l'installe en mode 
    - soit avec le bouton vert **Code → Download ZIP** de cette page, puis décompresser l'archive ;
    - soit avec git :
      ```bash
-     git clone git@github.com:erocha42/wikimasters-autopull.git
+     git clone https://github.com/Louis27940/wikimasters-autopull
      ```
 
 ### Chrome & navigateurs Chromium (Edge, Brave, Opera…)
@@ -83,5 +83,7 @@ L'extension n'envoie aucune donnée à l'extérieur. Elle se contente de cliquer
 Projet non officiel, sans lien avec WikiMasters. Automatiser des actions peut être contraire aux conditions d'utilisation du site : à utiliser à vos risques.
 
 ## Licence
+
+Fork du projet de [Erocha42](git@github.com:erocha42/wikimasters-autopull)
 
 MIT
