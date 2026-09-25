@@ -3,7 +3,7 @@
 const ext = globalThis.browser || globalThis.chrome;
 const PULLS_URL = "https://www.wiki-masters.com/pulls";
 const ALARM = "wm-autopull";
-const DEFAULTS = { enabled: true, periodMin: 100, background: true, notify: true };
+const DEFAULTS = { enabled: true, periodMin: 100, maxPacks: 10, background: true, notify: true };
 
 async function getSettings() {
   return { ...DEFAULTS, ...(await ext.storage.local.get(Object.keys(DEFAULTS))) };
@@ -17,72 +17,137 @@ async function schedule() {
 
 function waitTabComplete(tabId, timeout = 45000) {
   return new Promise((resolve, reject) => {
-    const timer = setTimeout(() => { ext.tabs.onUpdated.removeListener(fn); reject(new Error("Chargement trop long")); }, timeout);
-    function fn(id, info) {
+    let timer;
+    const cleanup = () => {
+      clearTimeout(timer);
+      ext.tabs.onUpdated.removeListener(onUpdated);
+      ext.tabs.onRemoved.removeListener(onRemoved);
+    };
+
+    function onUpdated(id, info) {
       if (id === tabId && info.status === "complete") {
-        clearTimeout(timer); ext.tabs.onUpdated.removeListener(fn); resolve();
+        cleanup();
+        resolve();
       }
     }
-    ext.tabs.onUpdated.addListener(fn);
-    ext.tabs.get(tabId).then((t) => { if (t.status === "complete") fn(tabId, { status: "complete" }); });
+
+    function onRemoved(id) {
+      if (id === tabId) {
+        cleanup();
+        reject(new Error("Onglet fermé par l'utilisateur"));
+      }
+    }
+
+    timer = setTimeout(() => {
+      cleanup();
+      reject(new Error("Chargement trop long"));
+    }, timeout);
+
+    ext.tabs.onUpdated.addListener(onUpdated);
+    ext.tabs.onRemoved.addListener(onRemoved);
+    ext.tabs.get(tabId).then((t) => {
+      if (t && t.status === "complete") {
+        cleanup();
+        resolve();
+      }
+    }).catch(() => {});
   });
 }
 
 async function run(forceActive = false) {
   const s = await getSettings();
+  if (!s.enabled && !forceActive) return;
+
   const { running } = await ext.storage.local.get("running");
   if (running && Date.now() - running < 5 * 60000) return; // déjà en cours
+
   await ext.storage.local.set({ running: Date.now(), lastStatus: "En cours…" });
 
-  const tab = await ext.tabs.create({ url: PULLS_URL, active: forceActive || !s.background });
+  let tab = null;
+  let onTabRemoved = null;
+
   try {
-    await waitTabComplete(tab.id);
-    await ext.scripting.executeScript({ target: { tabId: tab.id }, files: ["opener.js"] });
-    await ext.scripting.executeScript({
-      target: { tabId: tab.id },
-      args: [tab.id, forceActive],
-      func: (tabId, wasActive) => {
-        wikiMastersOpenAll(10)
-          .catch((e) => ({ opened: 0, error: String(e) }))
-          .then((result) => (globalThis.browser || globalThis.chrome).runtime.sendMessage({ type: "wm-done", tabId, wasActive, result }));
-      },
+    tab = await ext.tabs.create({ url: PULLS_URL, active: forceActive || !s.background });
+
+    // Surveillance de fermeture inattendue pendant tout le traitement
+    const tabClosedPromise = new Promise((_, reject) => {
+      onTabRemoved = (id) => {
+        if (id === tab.id) reject(new Error("Onglet fermé prématurément"));
+      };
+      ext.tabs.onRemoved.addListener(onTabRemoved);
     });
+
+    const executionPromise = (async () => {
+      await waitTabComplete(tab.id);
+      await ext.scripting.executeScript({ target: { tabId: tab.id }, files: ["opener.js"] });
+      const results = await ext.scripting.executeScript({
+        target: { tabId: tab.id },
+        args: [s.maxPacks || 10],
+        func: (maxPacks) => wikiMastersOpenAll(maxPacks),
+      });
+      return results?.[0]?.result || { opened: 0, error: "Aucun résultat retourné" };
+    })();
+
+    const result = await Promise.race([executionPromise, tabClosedPromise]);
+    await finish(tab.id, forceActive, result);
   } catch (e) {
-    await finish(tab.id, forceActive, { opened: 0, error: String(e.message || e) });
+    const errorMsg = String(e?.message || e);
+    await finish(tab?.id, forceActive, { opened: 0, error: errorMsg });
+  } finally {
+    if (onTabRemoved) {
+      try { ext.tabs.onRemoved.removeListener(onTabRemoved); } catch {}
+    }
   }
 }
 
 async function finish(tabId, wasActive, result) {
   const s = await getSettings();
+
   // Réessai une fois au premier plan si l'onglet en arrière-plan a échoué
-  if (result.error && !wasActive && s.background) {
+  if (result?.error && !wasActive && s.background && result.error !== "Onglet fermé par l'utilisateur") {
     await ext.storage.local.remove("running");
-    try { await ext.tabs.remove(tabId); } catch {}
+    if (tabId) {
+      try { await ext.tabs.remove(tabId); } catch {}
+    }
     return run(true);
   }
-  const status = result.error
-    ? `Erreur : ${result.error} (${result.opened} ouvert(s))`
-    : `${result.opened} paquet(s) ouvert(s)` + (result.remaining != null ? `, ${result.remaining} restant(s)` : "");
+
+  const status = result?.error
+    ? `Erreur : ${result.error} (${result.opened || 0} ouvert(s))`
+    : `${result.opened || 0} paquet(s) ouvert(s)` + (result.remaining != null ? `, ${result.remaining} restant(s)` : "");
+
   await ext.storage.local.set({ lastRun: Date.now(), lastStatus: status });
   await ext.storage.local.remove("running");
-  try { await ext.tabs.remove(tabId); } catch {}
+
+  if (tabId) {
+    try { await ext.tabs.remove(tabId); } catch {}
+  }
+
   if (s.notify) {
-    ext.notifications.create({
-      type: "basic", iconUrl: "icon.png", title: "WikiMasters Auto-Pull", message: status,
-    });
+    try {
+      ext.notifications.create({
+        type: "basic",
+        iconUrl: "icon.png",
+        title: "WikiMasters Auto-Pull",
+        message: status,
+      });
+    } catch {}
   }
 }
 
 ext.runtime.onMessage.addListener((msg, sender, sendResponse) => {
-  if (msg.type === "wm-done") finish(msg.tabId, msg.wasActive, msg.result);
-  else if (msg.type === "wm-run-now") run();
+  if (msg.type === "wm-run-now") run(true);
   else if (msg.type === "wm-reschedule") schedule();
   sendResponse?.({ ok: true });
 });
 
 ext.alarms.onAlarm.addListener((a) => { if (a.name === ALARM) run(); });
-ext.runtime.onInstalled.addListener(async () => { await schedule(); run(); });
+ext.runtime.onInstalled.addListener(async () => { await schedule(); });
 ext.runtime.onStartup.addListener(async () => {
   await ext.storage.local.remove("running");
   if (!(await ext.alarms.get(ALARM))) await schedule();
 });
+
+if (typeof module !== "undefined" && module.exports) {
+  module.exports = { run, finish, schedule, getSettings, waitTabComplete, DEFAULTS };
+}
