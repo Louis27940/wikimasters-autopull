@@ -6,7 +6,17 @@ const ALARM = "wm-autopull";
 const DEFAULTS = { enabled: true, periodMin: 100, maxPacks: 10, background: true, notify: true };
 
 async function getSettings() {
-  return { ...DEFAULTS, ...(await ext.storage.local.get(Object.keys(DEFAULTS))) };
+  const raw = await ext.storage.local.get(Object.keys(DEFAULTS));
+  const merged = { ...DEFAULTS, ...raw };
+  const p = parseInt(merged.periodMin, 10);
+  const m = parseInt(merged.maxPacks, 10);
+  return {
+    enabled: Boolean(merged.enabled),
+    periodMin: !isNaN(p) ? Math.min(1440, Math.max(1, p)) : DEFAULTS.periodMin,
+    maxPacks: !isNaN(m) ? Math.min(10, Math.max(1, m)) : DEFAULTS.maxPacks,
+    background: Boolean(merged.background),
+    notify: Boolean(merged.notify),
+  };
 }
 
 async function schedule() {

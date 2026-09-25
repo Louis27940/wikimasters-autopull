@@ -5,13 +5,13 @@ const DEFAULTS = { enabled: true, periodMin: 100, maxPacks: 10, background: true
 const $ = (id) => (typeof document !== "undefined" ? document.getElementById(id) : null);
 const fmt = (t) => (t ? new Date(t).toLocaleString("fr-FR") : "—");
 
-function sanitizeSettings(input) {
+function sanitizeSettings(input = {}) {
   const p = parseInt(input.periodMin, 10);
   const m = parseInt(input.maxPacks, 10);
   return {
     enabled: Boolean(input.enabled),
-    periodMin: !isNaN(p) && p >= 1 ? p : DEFAULTS.periodMin,
-    maxPacks: !isNaN(m) && m >= 1 ? m : DEFAULTS.maxPacks,
+    periodMin: !isNaN(p) ? Math.min(1440, Math.max(1, p)) : DEFAULTS.periodMin,
+    maxPacks: !isNaN(m) ? Math.min(10, Math.max(1, m)) : DEFAULTS.maxPacks,
     background: Boolean(input.background),
     notify: Boolean(input.notify),
   };
