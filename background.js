@@ -64,6 +64,21 @@ function waitTabComplete(tabId, timeout = 45000) {
   });
 }
 
+let currentTabId = null;
+
+async function stopCurrentRun() {
+  if (currentTabId) {
+    try { await ext.tabs.remove(currentTabId); } catch {}
+    currentTabId = null;
+  }
+  await ext.storage.local.set({
+    lastRun: Date.now(),
+    lastStatus: "Opération interrompue par l'utilisateur",
+    lastStatusType: "CANCELLED"
+  });
+  await ext.storage.local.remove("running");
+}
+
 async function run(forceActive = false) {
   const s = await getSettings();
   if (!s.enabled && !forceActive) return;
@@ -78,6 +93,7 @@ async function run(forceActive = false) {
 
   try {
     tab = await ext.tabs.create({ url: PULLS_URL, active: forceActive || !s.background });
+    currentTabId = tab.id;
 
     // Surveillance de fermeture inattendue pendant tout le traitement
     const tabClosedPromise = new Promise((_, reject) => {
@@ -95,15 +111,16 @@ async function run(forceActive = false) {
         args: [s.maxPacks || 10],
         func: (maxPacks) => wikiMastersOpenAll(maxPacks),
       });
-      return results?.[0]?.result || { opened: 0, error: "Aucun résultat retourné" };
+      return results?.[0]?.result || { opened: 0, statusType: "ERROR", error: "Aucun résultat retourné" };
     })();
 
     const result = await Promise.race([executionPromise, tabClosedPromise]);
     await finish(tab.id, forceActive, result);
   } catch (e) {
     const errorMsg = String(e?.message || e);
-    await finish(tab?.id, forceActive, { opened: 0, error: errorMsg });
+    await finish(tab?.id, forceActive, { opened: 0, statusType: "ERROR", error: errorMsg });
   } finally {
+    currentTabId = null;
     if (onTabRemoved) {
       try { ext.tabs.onRemoved.removeListener(onTabRemoved); } catch {}
     }
@@ -113,8 +130,8 @@ async function run(forceActive = false) {
 async function finish(tabId, wasActive, result) {
   const s = await getSettings();
 
-  // Réessai une fois au premier plan si l'onglet en arrière-plan a échoué
-  if (result?.error && !wasActive && s.background && result.error !== "Onglet fermé par l'utilisateur") {
+  // Réessai une fois au premier plan si l'onglet en arrière-plan a échoué (sauf si session expirée ou onglet fermé)
+  if (result?.error && !wasActive && s.background && result.statusType !== "AUTH_REQUIRED" && result.error !== "Onglet fermé par l'utilisateur") {
     await ext.storage.local.remove("running");
     if (tabId) {
       try { await ext.tabs.remove(tabId); } catch {}
@@ -122,11 +139,16 @@ async function finish(tabId, wasActive, result) {
     return run(true);
   }
 
+  const statusType = result?.statusType || (result?.error ? "ERROR" : "SUCCESS");
   const status = result?.error
     ? `Erreur : ${result.error} (${result.opened || 0} ouvert(s))`
     : `${result.opened || 0} paquet(s) ouvert(s)` + (result.remaining != null ? `, ${result.remaining} restant(s)` : "");
 
-  await ext.storage.local.set({ lastRun: Date.now(), lastStatus: status });
+  await ext.storage.local.set({
+    lastRun: Date.now(),
+    lastStatus: status,
+    lastStatusType: statusType
+  });
   await ext.storage.local.remove("running");
 
   if (tabId) {
@@ -147,6 +169,7 @@ async function finish(tabId, wasActive, result) {
 
 ext.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (msg.type === "wm-run-now") run(true);
+  else if (msg.type === "wm-stop") stopCurrentRun();
   else if (msg.type === "wm-reschedule") schedule();
   sendResponse?.({ ok: true });
 });
@@ -159,5 +182,5 @@ ext.runtime.onStartup.addListener(async () => {
 });
 
 if (typeof module !== "undefined" && module.exports) {
-  module.exports = { run, finish, schedule, getSettings, waitTabComplete, DEFAULTS };
+  module.exports = { run, finish, schedule, getSettings, waitTabComplete, stopCurrentRun, DEFAULTS };
 }

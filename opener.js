@@ -12,6 +12,17 @@ async function waitFor(fn, timeout = 15000, step = 50) {
   return null;
 }
 
+function checkAuthOrOpenButton() {
+  const isLoginPage = Boolean(
+    (typeof document !== "undefined" && document.querySelector("a[href*='login'], button[data-action='login'], form[action*='login']")) ||
+    (typeof document !== "undefined" && document.body && /connexion|se connecter|login/i.test(document.body.innerText || ""))
+  );
+  if (isLoginPage) {
+    return { opened: 0, statusType: "AUTH_REQUIRED", error: "Session expirée ou utilisateur déconnecté" };
+  }
+  return { opened: 0, statusType: "ERROR", error: "Bouton « Ouvrir » introuvable (non connecté ?)" };
+}
+
 async function wikiMastersOpenAll(maxPacks = 10) {
   const visibleButtons = () =>
     [...document.querySelectorAll("main button")].filter((b) => b.offsetParent);
@@ -26,7 +37,9 @@ async function wikiMastersOpenAll(maxPacks = 10) {
 
   // Attendre que l'écran d'ouverture soit prêt
   const ready = await waitFor(() => byText(/^Ouvrir$/), 30000, 100);
-  if (!ready) return { opened: 0, error: "Bouton « Ouvrir » introuvable (non connecté ?)" };
+  if (!ready) {
+    return checkAuthOrOpenButton();
+  }
 
   let opened = 0;
   for (let i = 0; i < maxPacks; i++) {
@@ -40,7 +53,7 @@ async function wikiMastersOpenAll(maxPacks = 10) {
 
     // Attendre l'écran de révélation
     const revealed = await waitFor(() => byText(/^(Encore|Continuer)/), 15000, 50);
-    if (!revealed) return { opened, error: "Écran des cartes non apparu" };
+    if (!revealed) return { opened, statusType: "ERROR", error: "Écran des cartes non apparu" };
 
     // Défiler les cartes réactivement jusqu'à ce que "Continuer" soit actif
     for (let k = 0; k < 20; k++) {
@@ -57,16 +70,16 @@ async function wikiMastersOpenAll(maxPacks = 10) {
     }
 
     const cont = byText(/^Continuer/);
-    if (!cont || cont.disabled) return { opened, error: "Bouton « Continuer » inaccessible" };
+    if (!cont || cont.disabled) return { opened, statusType: "ERROR", error: "Bouton « Continuer » inaccessible" };
     cont.click();
     opened++;
 
     // Attente réactive du retour à l'écran d'accueil ou de la fin des paquets
     await waitFor(() => byText(/^Ouvrir$/) || available() === 0, 8000, 50);
   }
-  return { opened, remaining: available() };
+  return { opened, remaining: available(), statusType: "SUCCESS" };
 }
 
 if (typeof module !== "undefined" && module.exports) {
-  module.exports = { waitFor, wikiMastersOpenAll, sleep };
+  module.exports = { waitFor, wikiMastersOpenAll, checkAuthOrOpenButton, sleep };
 }
