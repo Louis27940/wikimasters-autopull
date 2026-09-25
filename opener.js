@@ -1,20 +1,21 @@
 // Injecté dans la page https://www.wiki-masters.com/pulls
-// Flux observé : "Ouvrir" -> flèche suivante x4 -> "Continuer" -> retour à l'écran d'ouverture.
+// Flux optimisé : "Ouvrir" -> défilement réactif des cartes (150ms) -> "Continuer" -> détection immédiate de l'écran d'accueil.
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+async function waitFor(fn, timeout = 15000, step = 50) {
+  const t0 = Date.now();
+  while (Date.now() - t0 < timeout) {
+    const v = fn();
+    if (v) return v;
+    await sleep(step);
+  }
+  return null;
+}
+
 async function wikiMastersOpenAll(maxPacks = 10) {
-  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   const visibleButtons = () =>
     [...document.querySelectorAll("main button")].filter((b) => b.offsetParent);
-  const byText = (re) => visibleButtons().find((b) => re.test(b.innerText.trim()));
-
-  async function waitFor(fn, timeout = 15000, step = 250) {
-    const t0 = Date.now();
-    while (Date.now() - t0 < timeout) {
-      const v = fn();
-      if (v) return v;
-      await sleep(step);
-    }
-    return null;
-  }
+  const byText = (re) => visibleButtons().find((b) => re.test((b.innerText || "").trim()));
 
   const available = () => {
     const m = (document.querySelector("main")?.innerText || "").match(
@@ -24,36 +25,48 @@ async function wikiMastersOpenAll(maxPacks = 10) {
   };
 
   // Attendre que l'écran d'ouverture soit prêt
-  const ready = await waitFor(() => byText(/^Ouvrir$/), 30000);
+  const ready = await waitFor(() => byText(/^Ouvrir$/), 30000, 100);
   if (!ready) return { opened: 0, error: "Bouton « Ouvrir » introuvable (non connecté ?)" };
 
   let opened = 0;
   for (let i = 0; i < maxPacks; i++) {
-    const openBtn = await waitFor(() => byText(/^Ouvrir$/), 15000);
     const left = available();
-    if (!openBtn || openBtn.disabled || left === 0) break;
+    if (left === 0) break;
+
+    const openBtn = await waitFor(() => byText(/^Ouvrir$/), 10000, 50);
+    if (!openBtn || openBtn.disabled) break;
 
     openBtn.click();
 
     // Attendre l'écran de révélation
-    const revealed = await waitFor(() => byText(/^(Encore|Continuer)/), 20000);
+    const revealed = await waitFor(() => byText(/^(Encore|Continuer)/), 15000, 50);
     if (!revealed) return { opened, error: "Écran des cartes non apparu" };
 
-    // Faire défiler les cartes jusqu'à ce que "Continuer" soit actif
+    // Défiler les cartes réactivement jusqu'à ce que "Continuer" soit actif
     for (let k = 0; k < 20; k++) {
       const cont = byText(/^Continuer/);
       if (cont && !cont.disabled) break;
-      const arrows = visibleButtons().filter((b) => b.classList.contains("w-12"));
+
+      const arrows = visibleButtons().filter((b) => b.classList?.contains("w-12"));
       const next = arrows[arrows.length - 1];
-      if (next && !next.disabled) next.click();
-      await sleep(900);
+      if (next && !next.disabled) {
+        next.click();
+      }
+      // Pause anti-rebond courte plutôt que 900ms fixe
+      await sleep(150);
     }
 
     const cont = byText(/^Continuer/);
     if (!cont || cont.disabled) return { opened, error: "Bouton « Continuer » inaccessible" };
     cont.click();
     opened++;
-    await sleep(2000);
+
+    // Attente réactive du retour à l'écran d'accueil ou de la fin des paquets
+    await waitFor(() => byText(/^Ouvrir$/) || available() === 0, 8000, 50);
   }
   return { opened, remaining: available() };
+}
+
+if (typeof module !== "undefined" && module.exports) {
+  module.exports = { waitFor, wikiMastersOpenAll, sleep };
 }
