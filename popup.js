@@ -2,6 +2,8 @@
 // Alias `ext` pour éviter tout conflit avec les wrappers d'exécution de certains navigateurs (ex: Opera).
 const ext = globalThis.browser || globalThis.chrome;
 const DEFAULTS = { enabled: true, periodMin: 100, maxPacks: 10, background: true, notify: true };
+const LOGIN_URL = "https://www.wiki-masters.com/login";
+
 const $ = (id) => (typeof document !== "undefined" ? document.getElementById(id) : null);
 const fmt = (t) => (t ? new Date(t).toLocaleString("fr-FR") : "—");
 
@@ -17,6 +19,21 @@ function sanitizeSettings(input = {}) {
   };
 }
 
+function getStatusBadgeClass(statusType, isRunning) {
+  if (isRunning) return "status-badge status-running";
+  switch (statusType) {
+    case "SUCCESS":
+      return "status-badge status-success";
+    case "AUTH_REQUIRED":
+    case "CANCELLED":
+      return "status-badge status-warning";
+    case "ERROR":
+      return "status-badge status-error";
+    default:
+      return "status-badge";
+  }
+}
+
 async function refresh() {
   if (typeof document === "undefined") return;
   const s = { ...DEFAULTS, ...(await ext.storage.local.get(null)) };
@@ -29,13 +46,28 @@ async function refresh() {
   $("notify").checked = s.notify;
 
   $("lastRun").textContent = fmt(s.lastRun);
-  $("lastStatus").textContent = isRunning ? "En cours d'ouverture…" : (s.lastStatus || "—");
-  $("lastStatus").className = isRunning ? "status-badge status-running" : "status-badge";
 
-  $("run").disabled = isRunning;
-  $("run").textContent = isRunning ? "Ouverture en cours…" : "Ouvrir maintenant";
+  if (isRunning) {
+    $("lastStatus").innerHTML = '<span class="spinner"></span> Ouverture en cours…';
+    $("lastStatus").className = getStatusBadgeClass(s.lastStatusType, true);
+    $("run").textContent = "Arrêter le cycle";
+    $("run").className = "btn-action btn-stop";
+    $("run").disabled = false;
+  } else {
+    $("lastStatus").textContent = s.lastStatus || "—";
+    $("lastStatus").className = getStatusBadgeClass(s.lastStatusType, false);
+    $("run").textContent = "Ouvrir maintenant";
+    $("run").className = "btn-action";
+    $("run").disabled = false;
+  }
 
-  const a = await ext.alarms.get("wm-autopull");
+  // Affichage du bandeau de connexion si session expirée
+  const authBanner = $("authBanner");
+  if (authBanner) {
+    authBanner.style.display = s.lastStatusType === "AUTH_REQUIRED" ? "block" : "none";
+  }
+
+  const a = await ext.alarms?.get("wm-autopull");
   $("next").textContent = s.enabled && a ? fmt(a.scheduledTime) : "désactivé";
 }
 
@@ -49,29 +81,67 @@ async function save(reschedule) {
     notify: $("notify").checked,
   });
 
+  // Mettre à jour visuellement les champs avec les valeurs nettoyées
+  $("periodMin").value = sanitized.periodMin;
+  $("maxPacks").value = sanitized.maxPacks;
+  $("periodMin").classList.remove("input-invalid");
+  $("maxPacks").classList.remove("input-invalid");
+
   await ext.storage.local.set(sanitized);
-  if (reschedule) await ext.runtime.sendMessage({ type: "wm-reschedule" });
+  if (reschedule && ext.runtime?.sendMessage) {
+    await ext.runtime.sendMessage({ type: "wm-reschedule" });
+  }
+}
+
+function validateInput(inputEl, min, max) {
+  const val = parseInt(inputEl.value, 10);
+  if (isNaN(val) || val < min || val > max) {
+    inputEl.classList.add("input-invalid");
+  } else {
+    inputEl.classList.remove("input-invalid");
+  }
 }
 
 if (typeof document !== "undefined") {
   $("enabled").onchange = () => save(true);
+
+  $("periodMin").oninput = () => validateInput($("periodMin"), 1, 1440);
   $("periodMin").onchange = () => save(true);
+
+  $("maxPacks").oninput = () => validateInput($("maxPacks"), 1, 10);
   $("maxPacks").onchange = () => save(false);
+
   $("background").onchange = () => save(false);
   $("notify").onchange = () => save(false);
 
   $("run").onclick = async () => {
-    $("run").disabled = true;
-    $("run").textContent = "Lancement…";
-    $("lastStatus").textContent = "En cours…";
-    $("lastStatus").className = "status-badge status-running";
-    await ext.runtime.sendMessage({ type: "wm-run-now" });
+    const { running } = await ext.storage.local.get("running");
+    const isRunning = Boolean(running && Date.now() - running < 5 * 60000);
+
+    if (isRunning) {
+      $("run").disabled = true;
+      $("run").textContent = "Interruption…";
+      await ext.runtime.sendMessage({ type: "wm-stop" });
+    } else {
+      $("run").disabled = true;
+      $("run").textContent = "Lancement…";
+      $("lastStatus").innerHTML = '<span class="spinner"></span> Lancement…';
+      $("lastStatus").className = getStatusBadgeClass(null, true);
+      await ext.runtime.sendMessage({ type: "wm-run-now" });
+    }
   };
 
-  ext.storage.onChanged.addListener(refresh);
+  const loginBtn = $("loginBtn");
+  if (loginBtn) {
+    loginBtn.onclick = () => {
+      ext.tabs.create({ url: LOGIN_URL });
+    };
+  }
+
+  ext.storage?.onChanged?.addListener(refresh);
   refresh();
 }
 
 if (typeof module !== "undefined" && module.exports) {
-  module.exports = { DEFAULTS, sanitizeSettings, fmt };
+  module.exports = { DEFAULTS, sanitizeSettings, getStatusBadgeClass, fmt };
 }
