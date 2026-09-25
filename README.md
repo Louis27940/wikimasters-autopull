@@ -84,6 +84,6 @@ Projet non officiel, sans lien avec WikiMasters. Automatiser des actions peut ê
 
 ## Licence
 
-Fork du projet de [Erocha42](git@github.com:erocha42/wikimasters-autopull)
+Fork du projet de [Erocha42](https://github.com/erocha42/wikimasters-autopull)
 
 MIT
