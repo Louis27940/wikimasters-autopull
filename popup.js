@@ -3,6 +3,7 @@
 const ext = globalThis.browser || globalThis.chrome;
 const DEFAULTS = { enabled: true, periodMin: 100, maxPacks: 10, background: true, notify: true };
 const LOGIN_URL = "https://www.wiki-masters.com/login";
+const PULLS_URL = "https://www.wiki-masters.com/pulls";
 
 const $ = (id) => (typeof document !== "undefined" ? document.getElementById(id) : null);
 const fmt = (t) => (t ? new Date(t).toLocaleString("fr-FR") : "—");
@@ -25,6 +26,7 @@ function getStatusBadgeClass(statusType, isRunning) {
     case "SUCCESS":
       return "status-badge status-success";
     case "AUTH_REQUIRED":
+    case "VERIFICATION_REQUIRED":
     case "CANCELLED":
       return "status-badge status-warning";
     case "ERROR":
@@ -65,6 +67,12 @@ async function refresh() {
   const authBanner = $("authBanner");
   if (authBanner) {
     authBanner.style.display = s.lastStatusType === "AUTH_REQUIRED" ? "block" : "none";
+  }
+
+  // Affichage du bandeau de vérification si contrôle anti-bot requis
+  const verificationBanner = $("verificationBanner");
+  if (verificationBanner) {
+    verificationBanner.style.display = s.lastStatusType === "VERIFICATION_REQUIRED" ? "block" : "none";
   }
 
   const a = await ext.alarms?.get("wm-autopull");
@@ -135,6 +143,13 @@ if (typeof document !== "undefined") {
   if (loginBtn) {
     loginBtn.onclick = () => {
       ext.tabs.create({ url: LOGIN_URL });
+    };
+  }
+
+  const verifyBtn = $("verifyBtn");
+  if (verifyBtn) {
+    verifyBtn.onclick = () => {
+      ext.tabs.create({ url: PULLS_URL });
     };
   }
 
