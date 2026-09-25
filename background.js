@@ -135,6 +135,9 @@ function buildNotificationData(statusType, rawMessage) {
   if (statusType === "AUTH_REQUIRED") {
     title = "WikiMasters : Connexion requise";
     message = "Session expirée. Cliquez ici pour vous reconnecter.";
+  } else if (statusType === "VERIFICATION_REQUIRED") {
+    title = "WikiMasters : Vérification requise";
+    message = "Contrôle anti-bot détecté. Cliquez ici pour valider manuellement.";
   } else if (statusType === "ERROR") {
     title = "WikiMasters : Erreur";
     message = rawMessage || "Une erreur est survenue lors de l'ouverture.";
@@ -149,8 +152,8 @@ function buildNotificationData(statusType, rawMessage) {
 async function finish(tabId, wasActive, result) {
   const s = await getSettings();
 
-  // Réessai une fois au premier plan si l'onglet en arrière-plan a échoué (sauf si session expirée ou onglet fermé)
-  if (result?.error && !wasActive && s.background && result.statusType !== "AUTH_REQUIRED" && result.error !== "Onglet fermé par l'utilisateur") {
+  // Réessai une fois au premier plan si l'onglet en arrière-plan a échoué (sauf si session expirée, vérification requise ou onglet fermé)
+  if (result?.error && !wasActive && s.background && result.statusType !== "AUTH_REQUIRED" && result.statusType !== "VERIFICATION_REQUIRED" && result.error !== "Onglet fermé par l'utilisateur") {
     await ext.storage.local.remove("running");
     if (tabId) {
       try { await ext.tabs.remove(tabId); } catch {}

@@ -18,4 +18,10 @@ test("buildNotificationData formats titles and messages cleanly without any emoj
   assert.strictEqual(errorNotif.title, "WikiMasters : Erreur");
   assert.strictEqual(errorNotif.message, "Erreur réseau");
   assert.ok(!/[\u{1F300}-\u{1FAD6}]/u.test(errorNotif.title + errorNotif.message));
+
+  const verifyNotif = buildNotificationData("VERIFICATION_REQUIRED", "Vérification requise");
+  assert.strictEqual(verifyNotif.title, "WikiMasters : Vérification requise");
+  assert.ok(verifyNotif.message.includes("Contrôle anti-bot détecté"));
+  assert.ok(verifyNotif.message.includes("Cliquez ici pour valider manuellement"));
+  assert.ok(!/[\u{1F300}-\u{1FAD6}]/u.test(verifyNotif.title + verifyNotif.message));
 });
