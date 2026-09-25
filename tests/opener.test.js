@@ -38,3 +38,9 @@ test("wikiMastersOpenAll handles zero available packs cleanly", async () => {
   assert.strictEqual(res.opened, 0);
   assert.strictEqual(res.remaining, 0);
 });
+
+test("opener defines CARD_SLEEP_MS (200ms) and PACK_SLEEP_MS (750ms)", () => {
+  const { CARD_SLEEP_MS, PACK_SLEEP_MS } = require("../opener.js");
+  assert.strictEqual(CARD_SLEEP_MS, 200);
+  assert.strictEqual(PACK_SLEEP_MS, 750);
+});

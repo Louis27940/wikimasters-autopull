@@ -1,6 +1,8 @@
 // Injecté dans la page https://www.wiki-masters.com/pulls
-// Flux optimisé : "Ouvrir" -> défilement réactif des cartes (150ms) -> "Continuer" -> détection immédiate de l'écran d'accueil.
+// Flux optimisé : "Ouvrir" -> défilement réactif des cartes (200ms) -> "Continuer" -> pause avant prochain paquet (750ms).
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const CARD_SLEEP_MS = 200;
+const PACK_SLEEP_MS = 750;
 
 async function waitFor(fn, timeout = 15000, step = 50) {
   const t0 = Date.now();
@@ -65,8 +67,8 @@ async function wikiMastersOpenAll(maxPacks = 10) {
       if (next && !next.disabled) {
         next.click();
       }
-      // Pause anti-rebond courte plutôt que 900ms fixe
-      await sleep(150);
+      // Pause entre chaque carte
+      await sleep(CARD_SLEEP_MS);
     }
 
     const cont = byText(/^Continuer/);
@@ -76,10 +78,15 @@ async function wikiMastersOpenAll(maxPacks = 10) {
 
     // Attente réactive du retour à l'écran d'accueil ou de la fin des paquets
     await waitFor(() => byText(/^Ouvrir$/) || available() === 0, 8000, 50);
+
+    // Pause avant d'ouvrir un autre paquet
+    if (i < maxPacks - 1 && available() !== 0) {
+      await sleep(PACK_SLEEP_MS);
+    }
   }
   return { opened, remaining: available(), statusType: "SUCCESS" };
 }
 
 if (typeof module !== "undefined" && module.exports) {
-  module.exports = { waitFor, wikiMastersOpenAll, checkAuthOrOpenButton, sleep };
+  module.exports = { waitFor, wikiMastersOpenAll, checkAuthOrOpenButton, sleep, CARD_SLEEP_MS, PACK_SLEEP_MS };
 }
